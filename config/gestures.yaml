@@ -1,0 +1,62 @@
+# Gesture → Smart Home Action Mapping
+# ------------------------------------
+# Each key is the internal gesture name recognised by the detector.
+# action:      internal action id sent to the home backend
+# description: human-readable label shown in the UI and logs
+# cooldown:    minimum seconds between consecutive triggers of this gesture
+
+gestures:
+
+  heart:
+    name: "Finger Heart"
+    action: "ac_toggle"
+    description: "Toggle AC"
+    cooldown: 2.5
+
+  open_palm:
+    name: "Open Palm"
+    action: "ac_increase_temp"
+    description: "Increase AC temperature"
+    cooldown: 1.5
+
+  fist:
+    name: "Fist"
+    action: "ac_decrease_temp"
+    description: "Decrease AC temperature"
+    cooldown: 1.5
+
+  thumbs_up:
+    name: "Thumbs Up"
+    action: "lights_on"
+    description: "Turn on lights"
+    cooldown: 2.0
+
+  thumbs_down:
+    name: "Thumbs Down"
+    action: "lights_off"
+    description: "Turn off lights"
+    cooldown: 2.0
+
+  peace:
+    name: "Peace Sign"
+    action: "volume_up"
+    description: "Volume up"
+    cooldown: 1.0
+
+  rock:
+    name: "Rock On"
+    action: "volume_down"
+    description: "Volume down"
+    cooldown: 1.0
+
+  ok:
+    name: "OK Sign"
+    action: "custom_scene"
+    description: "Activate custom scene"
+    cooldown: 3.0
+
+  point:
+    name: "Pointing"
+    action: "lights_toggle"
+    description: "Toggle lights"
+    cooldown: 2.0
