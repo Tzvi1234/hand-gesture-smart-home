@@ -1,8 +1,10 @@
 import cv2
-import mediapipe as mp
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional
+from mediapipe.python.solutions import hands as mp_hands_module
+from mediapipe.python.solutions import drawing_utils as mp_drawing_utils
+from mediapipe.python.solutions import drawing_styles as mp_drawing_styles
 
 
 @dataclass
@@ -28,9 +30,9 @@ class HandDetector:
         detection_confidence: float = 0.7,
         tracking_confidence: float = 0.5,
     ):
-        self.mp_hands = mp.solutions.hands
-        self.mp_draw = mp.solutions.drawing_utils
-        self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.mp_hands = mp_hands_module
+        self.mp_draw = mp_drawing_utils
+        self.mp_drawing_styles = mp_drawing_styles
 
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,

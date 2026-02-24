@@ -3,7 +3,9 @@ from typing import Optional, List
 
 import cv2
 import numpy as np
-import mediapipe as mp
+from mediapipe.python.solutions import hands as mp_hands_module
+from mediapipe.python.solutions import drawing_utils as mp_drawing_utils
+from mediapipe.python.solutions import drawing_styles as mp_drawing_styles
 from PIL import Image, ImageDraw, ImageFont
 
 from ..gesture.detector import DetectionResult
@@ -30,9 +32,9 @@ GESTURE_LABELS = {
 class Visualizer:
 
     def __init__(self):
-        self._mp_draw   = mp.solutions.drawing_utils
-        self._mp_styles = mp.solutions.drawing_styles
-        self._mp_hands  = mp.solutions.hands
+        self._mp_draw   = mp_drawing_utils
+        self._mp_styles = mp_drawing_styles
+        self._mp_hands  = mp_hands_module
 
         try:
             self._emoji_font = ImageFont.truetype(EMOJI_FONT, size=EMOJI_FONT_SIZE)
