@@ -1,45 +1,50 @@
 import time
+import os
 from typing import Optional, List
 
 import cv2
 import numpy as np
-from mediapipe.python.solutions import hands as mp_hands_module
-from mediapipe.python.solutions import drawing_utils as mp_drawing_utils
-from mediapipe.python.solutions import drawing_styles as mp_drawing_styles
 from PIL import Image, ImageDraw, ImageFont
 
-from ..gesture.detector import DetectionResult
+from ..gesture.detector import DetectionResult, HAND_CONNECTIONS
 from ..gesture.recognizer import RecognizedGesture
 
-EMOJI_FONT = "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
-EMOJI_FONT_SIZE = 109          # גודל גופן — אימוגי יוצא כ-~136px
-EMOJI_DISPLAY_SECS = 2.0      # כמה שניות האימוגי מוצג
+# גופן אימוגי — Windows ו-Linux
+_EMOJI_FONT_CANDIDATES = [
+    "C:/Windows/Fonts/seguiemj.ttf",                                   # Windows (Segoe UI Emoji)
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",               # Linux
+    "/System/Library/Fonts/Apple Color Emoji.ttc",                     # macOS
+]
+
+EMOJI_DISPLAY_SECS = 2.0
 
 GESTURE_LABELS = {
-    "heart":      "❤️  לב",
-    "thumbs_up":  "👍  אגודל למעלה",
-    "thumbs_down":"👎  אגודל למטה",
-    "open_palm":  "🖐  כף פתוחה",
-    "fist":       "✊  אגרוף",
-    "peace":      "✌️  peace",
-    "point":      "👆  מצביע",
-    "rock":       "🤘  rock",
-    "l_shape":    "🤙  L",
+    "heart":      "לב",
+    "thumbs_up":  "אגודל למעלה",
+    "thumbs_down": "אגודל למטה",
+    "open_palm":  "כף פתוחה",
+    "fist":       "אגרוף",
+    "peace":      "peace",
+    "point":      "מצביע",
+    "rock":       "rock",
     "unknown":    "",
 }
+
+
+def _load_emoji_font(size: int):
+    for path in _EMOJI_FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size=size)
+            except Exception:
+                continue
+    return None
 
 
 class Visualizer:
 
     def __init__(self):
-        self._mp_draw   = mp_drawing_utils
-        self._mp_styles = mp_drawing_styles
-        self._mp_hands  = mp_hands_module
-
-        try:
-            self._emoji_font = ImageFont.truetype(EMOJI_FONT, size=EMOJI_FONT_SIZE)
-        except Exception:
-            self._emoji_font = None   # fallback: ללא PIL
+        self._emoji_font = _load_emoji_font(size=109)
 
         self._active_emoji: Optional[str] = None
         self._emoji_start:  float = 0.0
@@ -58,41 +63,46 @@ class Visualizer:
     ) -> np.ndarray:
         display = frame.copy()
 
-        # ציור נקודות יד
-        if detection.raw_results and detection.raw_results.multi_hand_landmarks:
-            for hand_lm in detection.raw_results.multi_hand_landmarks:
-                self._mp_draw.draw_landmarks(
-                    display,
-                    hand_lm,
-                    self._mp_hands.HAND_CONNECTIONS,
-                    self._mp_styles.get_default_hand_landmarks_style(),
-                    self._mp_styles.get_default_hand_connections_style(),
-                )
+        # ציור נקודות ועצמות יד
+        self._draw_landmarks(display, detection)
 
-        # שם התנועה הנוכחית (פינה שמאלית עליונה)
+        # שם התנועה — פינה שמאלית עליונה
         self._draw_gesture_label(display, gestures)
 
         # אימוגי גדול במרכז
         self._draw_emoji(display)
 
-        # הוראות
         h = display.shape[0]
-        cv2.putText(display, "Q / ESC: יציאה", (10, h - 10),
+        cv2.putText(display, "Q / ESC: quit", (10, h - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.42, (120, 120, 120), 1)
 
         return display
 
     # ------------------------------------------------------------------ #
 
+    def _draw_landmarks(self, frame: np.ndarray, detection: DetectionResult):
+        h, w = frame.shape[:2]
+        for hand in detection.hands:
+            lm = hand.landmarks
+
+            # חיבורים
+            for a, b in HAND_CONNECTIONS:
+                x1, y1 = int(lm[a].x * w), int(lm[a].y * h)
+                x2, y2 = int(lm[b].x * w), int(lm[b].y * h)
+                cv2.line(frame, (x1, y1), (x2, y2), (0, 200, 255), 2)
+
+            # נקודות
+            for pt in lm:
+                cx, cy = int(pt.x * w), int(pt.y * h)
+                cv2.circle(frame, (cx, cy), 5, (255, 255, 255), -1)
+                cv2.circle(frame, (cx, cy), 5, (0, 150, 255), 1)
+
     def _draw_gesture_label(self, frame: np.ndarray, gestures: List[RecognizedGesture]):
-        if not gestures:
-            return
-        # קח את התנועה הראשונה שיש לה שם
         for g in gestures:
             label = GESTURE_LABELS.get(g.name, "")
             if label:
-                cv2.putText(frame, label, (10, 35),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 220, 220), 2)
+                cv2.putText(frame, label, (10, 38),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 220, 220), 2)
                 break
 
     def _draw_emoji(self, frame: np.ndarray):
@@ -106,44 +116,29 @@ class Visualizer:
 
         alpha = max(0.0, 1.0 - elapsed / EMOJI_DISPLAY_SECS)
         h, w = frame.shape[:2]
-        emoji_size = 200
+        size = 200
 
         if self._emoji_font:
-            self._draw_emoji_pil(frame, self._active_emoji, alpha, emoji_size, w, h)
+            # PIL — אימוגי צבעוני אמיתי
+            layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            draw  = ImageDraw.Draw(layer)
+            draw.text((0, 0), self._active_emoji, font=self._emoji_font,
+                      embedded_color=True)
+            r, g, b, a = layer.split()
+            a = a.point(lambda v: int(v * alpha))
+            layer = Image.merge("RGBA", (r, g, b, a))
+
+            pil_frame = Image.fromarray(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            ).convert("RGBA")
+            pil_frame.paste(layer, ((w - size) // 2, (h - size) // 2), layer)
+            frame[:] = cv2.cvtColor(np.array(pil_frame.convert("RGB")),
+                                    cv2.COLOR_RGB2BGR)
         else:
-            # Fallback: טקסט ASCII גדול
-            text = self._active_emoji
-            sz, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 3.5, 6)
-            x = (w - sz[0]) // 2
-            y = (h + sz[1]) // 2
+            # Fallback — טקסט רגיל
             c = int(255 * alpha)
-            cv2.putText(frame, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX,
-                        3.5, (c, c, c), 6)
-
-    def _draw_emoji_pil(
-        self,
-        frame: np.ndarray,
-        emoji: str,
-        alpha: float,
-        size: int,
-        w: int,
-        h: int,
-    ):
-        # צור שכבת אימוגי שקופה
-        layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        draw  = ImageDraw.Draw(layer)
-        draw.text((0, 0), emoji, font=self._emoji_font, embedded_color=True)
-
-        # הפעל שקיפות
-        r, g, b, a = layer.split()
-        a = a.point(lambda v: int(v * alpha))
-        layer = Image.merge("RGBA", (r, g, b, a))
-
-        # הדבק על הפריים במרכז
-        pil_frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert("RGBA")
-        ex = (w - size) // 2
-        ey = (h - size) // 2
-        pil_frame.paste(layer, (ex, ey), layer)
-
-        result = cv2.cvtColor(np.array(pil_frame.convert("RGB")), cv2.COLOR_RGB2BGR)
-        frame[:] = result
+            sz, _ = cv2.getTextSize(self._active_emoji,
+                                    cv2.FONT_HERSHEY_SIMPLEX, 3.5, 6)
+            cv2.putText(frame, self._active_emoji,
+                        ((w - sz[0]) // 2, (h + sz[1]) // 2),
+                        cv2.FONT_HERSHEY_SIMPLEX, 3.5, (c, c, c), 6)
